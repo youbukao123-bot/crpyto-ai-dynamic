@@ -1,0 +1,69 @@
+# 在线交易系统依赖包
+# 适用于 Ubuntu 22.04 LTS
+
+# 数据处理和分析
+pandas>=1.5.0
+numpy>=1.24.0
+
+# HTTP请求和API调用
+requests>=2.28.0
+urllib3>=1.26.0
+
+# 时间和日期处理
+pytz>=2022.7
+
+# 任务调度
+schedule>=1.2.0
+
+# 加密货币交易API (币安)
+python-binance>=1.0.17
+
+# JSON处理 (Python内置，但确保兼容性)
+# json - 内置模块
+
+# 系统和路径处理 (Python内置)
+# os, sys, pathlib - 内置模块
+
+# 数学计算 (Python内置)
+# math, decimal - 内置模块
+
+# 日期时间处理 (Python内置)
+# datetime - 内置模块
+
+# 枚举类型 (Python内置)
+# enum - 内置模块
+
+# 线程处理 (Python内置)
+# threading - 内置模块
+
+# 命令行参数解析 (Python内置)
+# argparse - 内置模块
+
+# 类型注解 (Python内置)
+# typing - 内置模块
+
+# 可选：数据可视化 (如果需要图表分析)
+# matplotlib>=3.6.0
+# plotly>=5.11.0
+
+# 可选：更好的HTTP客户端
+# httpx>=0.24.0
+
+# 可选：异步支持
+# asyncio - 内置模块
+# aiohttp>=3.8.0
+
+# 可选：日志增强
+# colorlog>=6.7.0
+
+# 可选：配置文件验证
+# jsonschema>=4.17.0
+
+# 可选：更好的错误处理
+# tenacity>=8.2.0
+
+# 可选：内存和性能监控
+# psutil>=5.9.0
+
+# 可选：更安全的环境变量管理
+# python-dotenv>=1.0.0

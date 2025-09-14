@@ -18,6 +18,7 @@ sys.path.insert(0, src_dir)
 from gateway.binance import BinanceSpotHttp, OrderStatus, OrderType, OrderSide
 from utils.log_utils import print_log
 from online_trade.config_loader import get_config
+from online_trade.dingtalk_notifier import get_notifier, init_notifier
 
 # 北京时区
 BEIJING_TZ = pytz.timezone('Asia/Shanghai')
@@ -172,12 +173,13 @@ def round_to(value: float, target: float) -> float:
 class EnhancedTrader:
     """增强版动量策略交易器"""
     
-    def __init__(self, config_override=None):
+    def __init__(self, config_override=None, dingtalk_webhook=None):
         """
         初始化交易器
         
         参数:
         - config_override: 配置覆盖字典（可选）
+        - dingtalk_webhook: 钉钉Webhook地址（可选）
         """
         # 获取配置
         self.config = get_config()
@@ -187,6 +189,17 @@ class EnhancedTrader:
             for section, values in config_override.items():
                 if hasattr(self.config, '_config') and section in self.config._config:
                     self.config._config[section].update(values)
+        
+        # 初始化钉钉通知器
+        self.notifier = None
+        if dingtalk_webhook:
+            try:
+                # 使用钉钉机器人要求的关键词
+                keywords = ["Code"]
+                self.notifier = init_notifier(dingtalk_webhook, keywords)
+                print(f"🔔 钉钉通知器已启用")
+            except Exception as e:
+                print(f"⚠️ 钉钉通知器初始化失败: {str(e)}")
         
         # 使用配置中的API信息创建HTTP客户端
         self.http_client = BinanceSpotHttp(
@@ -198,6 +211,9 @@ class EnhancedTrader:
             timeout=self.config.timeout
         )
         
+        # 交易模式配置
+        self.enable_real_trading = self.config.enable_real_trading
+        
         # 资金管理（从配置读取）
         self.initial_capital = self.config.initial_capital
         self.max_position_pct = self.config.max_position_pct
@@ -208,6 +224,11 @@ class EnhancedTrader:
         self.use_limit_order = self.config.use_limit_order
         self.slippage_limit = self.config.slippage_limit
         
+        # 模拟交易状态
+        if not self.enable_real_trading:
+            self.simulated_usdt_balance = self.initial_capital
+            self.simulated_positions = {}  # symbol -> simulated position info
+        
         # 持仓记录
         self.positions = {}  # symbol -> Position对象
         self.trade_history = []
@@ -217,12 +238,14 @@ class EnhancedTrader:
         self.order_timeout_hours = 48  # 挂单有效期48小时
         
         print(f"🚀 增强版交易器初始化完成")
+        print(f"   交易模式: {'💰 真实交易' if self.enable_real_trading else '🎮 模拟交易'}")
         print(f"   初始资金: ${self.initial_capital:,}")
         print(f"   单仓位上限: {self.max_position_pct:.1%}")
         print(f"   总仓位上限: {self.max_total_exposure:.1%}")
         print(f"   止损比例: {self.stop_loss_pct:.1%}")
         print(f"   止盈比例: {self.take_profit_pct:.1%}")
         print(f"   滑点限制: {self.slippage_limit:.3%}")
+        print(f"   钉钉通知: {'✅ 已启用' if self.notifier else '❌ 未启用'}")
     
     def get_account_balance(self):
         """获取账户余额"""
@@ -248,6 +271,10 @@ class EnhancedTrader:
     
     def get_usdt_balance(self):
         """获取USDT余额"""
+        if not self.enable_real_trading:
+            # 模拟交易模式，返回模拟余额
+            return self.simulated_usdt_balance
+        
         balances = self.get_account_balance()
         usdt_info = balances.get('USDT', {})
         return usdt_info.get('free', 0)
@@ -350,6 +377,120 @@ class EnhancedTrader:
         print(f"   计算数量: {quantity:.6f}")
         
         return quantity, target_investment
+    
+    def simulate_buy(self, symbol, investment_amount):
+        """
+        模拟市价买入
+        
+        参数:
+        - symbol: 交易对
+        - investment_amount: 投资金额（USDT）
+        
+        返回: (成交数量, 实际花费)
+        """
+        try:
+            print(f"🎮 模拟买入 {symbol}，金额: ${investment_amount:.2f}")
+            
+            # 获取当前价格
+            current_price = self.get_symbol_price(symbol)
+            if current_price <= 0:
+                print(f"❌ 无法获取 {symbol} 价格进行模拟交易")
+                return 0.0, 0.0
+            
+            # 检查模拟余额
+            if self.simulated_usdt_balance < investment_amount:
+                print(f"❌ 模拟余额不足: ${self.simulated_usdt_balance:.2f} < ${investment_amount:.2f}")
+                return 0.0, 0.0
+            
+            # 模拟买入（添加少量滑点）
+            slippage = 0.001  # 0.1% 滑点
+            actual_price = current_price * (1 + slippage)
+            executed_qty = investment_amount / actual_price
+            actual_cost = executed_qty * actual_price
+            
+            # 更新模拟余额
+            self.simulated_usdt_balance -= actual_cost
+            
+            print(f"✅ {symbol} 模拟买入成功")
+            print(f"📋 模拟订单信息:")
+            print(f"   成交价格: ${actual_price:.6f}")
+            print(f"   成交数量: {executed_qty:.6f}")
+            print(f"   实际花费: ${actual_cost:.2f}")
+            print(f"   剩余余额: ${self.simulated_usdt_balance:.2f}")
+            
+            # 记录交易
+            trade_record = {
+                'timestamp': datetime.now(BEIJING_TZ),
+                'symbol': symbol,
+                'action': 'SIMULATE_BUY',
+                'quantity': executed_qty,
+                'price': actual_price,
+                'cost': actual_cost,
+                'order_id': f'SIM_{int(datetime.now().timestamp())}',
+                'status': 'FILLED'
+            }
+            self.trade_history.append(trade_record)
+            
+            return executed_qty, actual_cost
+            
+        except Exception as e:
+            print(f"❌ {symbol} 模拟买入失败: {str(e)}")
+        
+        return 0.0, 0.0
+    
+    def simulate_sell(self, symbol, quantity):
+        """
+        模拟市价卖出
+        
+        参数:
+        - symbol: 交易对
+        - quantity: 卖出数量
+        
+        返回: 实际收入（USDT）
+        """
+        try:
+            print(f"🎮 模拟卖出 {symbol}，数量: {quantity:.6f}")
+            
+            # 获取当前价格
+            current_price = self.get_symbol_price(symbol)
+            if current_price <= 0:
+                print(f"❌ 无法获取 {symbol} 价格进行模拟交易")
+                return 0.0
+            
+            # 模拟卖出（添加少量滑点）
+            slippage = 0.001  # 0.1% 滑点
+            actual_price = current_price * (1 - slippage)
+            revenue = quantity * actual_price
+            
+            # 更新模拟余额
+            self.simulated_usdt_balance += revenue
+            
+            print(f"✅ {symbol} 模拟卖出成功")
+            print(f"📋 模拟订单信息:")
+            print(f"   成交价格: ${actual_price:.6f}")
+            print(f"   成交数量: {quantity:.6f}")
+            print(f"   实际收入: ${revenue:.2f}")
+            print(f"   当前余额: ${self.simulated_usdt_balance:.2f}")
+            
+            # 记录交易
+            trade_record = {
+                'timestamp': datetime.now(BEIJING_TZ),
+                'symbol': symbol,
+                'action': 'SIMULATE_SELL',
+                'quantity': quantity,
+                'price': actual_price,
+                'revenue': revenue,
+                'order_id': f'SIM_{int(datetime.now().timestamp())}',
+                'status': 'FILLED'
+            }
+            self.trade_history.append(trade_record)
+            
+            return revenue
+            
+        except Exception as e:
+            print(f"❌ {symbol} 模拟卖出失败: {str(e)}")
+        
+        return 0.0
     
     def buy_market(self, symbol, investment_amount):
         """
@@ -695,7 +836,10 @@ class EnhancedTrader:
             return False
         
         # 执行买入
-        if use_limit_order:
+        if not self.enable_real_trading:
+            # 模拟交易模式
+            executed_qty, actual_cost = self.simulate_buy(symbol, investment_amount)
+        elif use_limit_order:
             # 使用限价单，精确控制滑点
             limit_price = self.calculate_limit_price(symbol, 'BUY', slippage_limit)
             if limit_price:
@@ -728,6 +872,23 @@ class EnhancedTrader:
             print(f"   成本: ${actual_cost:.2f}")
             print(f"   订单类型: {'限价单' if use_limit_order else '市价单'}")
             
+            # 发送钉钉通知
+            if self.notifier:
+                order_type = "限价单" if use_limit_order else "市价单"
+                if not self.enable_real_trading:
+                    order_type = f"模拟{order_type}"
+                reason = f"成交量突破信号，信号强度{signal_strength:.1f}，使用{order_type}"
+                self.notifier.notify_position_opened(
+                    symbol=symbol,
+                    entry_price=avg_price,
+                    quantity=executed_qty,
+                    cost=actual_cost,
+                    strategy_type=strategy_type,
+                    signal_strength=signal_strength,
+                    reason=reason,
+                    is_simulation=not self.enable_real_trading
+                )
+            
             return True
         
         return False
@@ -750,7 +911,10 @@ class EnhancedTrader:
         quantity = position.quantity
         
         # 执行卖出
-        if use_limit_order:
+        if not self.enable_real_trading:
+            # 模拟交易模式
+            revenue = self.simulate_sell(symbol, quantity)
+        elif use_limit_order:
             # 使用限价单
             revenue = self.sell_limit(symbol, quantity, slippage_limit=slippage_limit)
             if revenue <= 0:
@@ -765,12 +929,32 @@ class EnhancedTrader:
             cost = position.cost
             pnl = revenue - cost
             pnl_pct = pnl / cost
+            exit_price = revenue / quantity
+            
+            # 计算持仓时长
+            current_time = datetime.now(BEIJING_TZ)
+            holding_hours = position.get_holding_hours(current_time)
             
             print(f"🏁 {symbol} 平仓完成!")
             print(f"   卖出金额: ${revenue:.2f}")
             print(f"   盈亏: ${pnl:.2f} ({pnl_pct:.2%})")
             print(f"   平仓原因: {reason}")
             print(f"   订单类型: {'限价单' if use_limit_order else '市价单'}")
+            
+            # 发送钉钉通知
+            if self.notifier:
+                self.notifier.notify_position_closed(
+                    symbol=symbol,
+                    exit_price=exit_price,
+                    quantity=quantity,
+                    revenue=revenue,
+                    cost=cost,
+                    pnl=pnl,
+                    pnl_pct=pnl_pct,
+                    reason=reason,
+                    holding_hours=holding_hours,
+                    is_simulation=not self.enable_real_trading
+                )
             
             # 删除持仓记录
             del self.positions[symbol]
@@ -818,13 +1002,22 @@ class EnhancedTrader:
             
             # 下限价买单
             try:
-                order_result = self.http_client.order_test_buy(
-                    symbol=symbol.upper(),
-                    type=OrderType.LIMIT,
-                    quantity=f"{quantity:.6f}",
-                    price=f"{golden_point:.6f}",
-                    timeInForce="GTC"  # Good Till Cancelled
-                )
+                if not self.enable_real_trading:
+                    # 模拟交易模式，创建模拟订单
+                    order_result = {
+                        'orderId': f'SIM_{int(datetime.now().timestamp())}',
+                        'clientOrderId': f'sim_order_{symbol}_{int(datetime.now().timestamp())}',
+                        'status': 'NEW'
+                    }
+                    print(f"🎮 模拟挂单创建成功: {symbol}")
+                else:
+                    order_result = self.http_client.order_test_buy(
+                        symbol=symbol.upper(),
+                        type=OrderType.LIMIT,
+                        quantity=f"{quantity:.6f}",
+                        price=f"{golden_point:.6f}",
+                        timeInForce="GTC"  # Good Till Cancelled
+                    )
                 
                 if order_result:
                     # 记录挂单信息
@@ -850,6 +1043,18 @@ class EnhancedTrader:
                     print(f"   挂单数量: {quantity:.6f}")
                     print(f"   投资金额: ${investment_amount:.2f}")
                     print(f"   有效期: {self.order_timeout_hours}小时")
+                    
+                    # 发送钉钉通知
+                    if self.notifier:
+                        reason = f"黄金分割点策略，收盘价${close_price:.6f}，开盘价${open_price:.6f}"
+                        self.notifier.notify_order_placed(
+                            symbol=symbol,
+                            order_type="黄金分割点挂单",
+                            price=golden_point,
+                            quantity=quantity,
+                            amount=investment_amount,
+                            reason=reason
+                        )
                     
                     return True, "挂单成功"
                 else:
@@ -877,6 +1082,11 @@ class EnhancedTrader:
                 # 查询订单状态
                 order_id = order_info['order_id']
                 if order_id:
+                    if not self.enable_real_trading and order_id.startswith('SIM_'):
+                        # 模拟交易模式，跳过真实订单查询
+                        # 在模拟模式下，挂单不会自动成交，需要手动处理或超时取消
+                        continue
+                    
                     order_status = self.http_client.get_order_by_id(symbol.upper(), order_id)
                     
                     if order_status:
@@ -905,10 +1115,29 @@ class EnhancedTrader:
                                 print(f"   成交数量: {filled_qty:.6f}")
                                 print(f"   成交金额: ${filled_qty * filled_price:.2f}")
                                 
+                                # 发送钉钉通知
+                                if self.notifier:
+                                    self.notifier.notify_order_filled(
+                                        symbol=symbol,
+                                        order_type="黄金分割点挂单",
+                                        fill_price=filled_price,
+                                        quantity=filled_qty,
+                                        amount=filled_qty * filled_price
+                                    )
+                                
                                 completed_orders.append(symbol)
                         
                         elif status in ['CANCELLED', 'REJECTED', 'EXPIRED']:
                             print(f"❌ {symbol} 挂单已取消/拒绝: {status}")
+                            
+                            # 发送钉钉通知
+                            if self.notifier:
+                                self.notifier.notify_order_cancelled(
+                                    symbol=symbol,
+                                    order_type="黄金分割点挂单",
+                                    reason=f"订单状态: {status}"
+                                )
+                            
                             completed_orders.append(symbol)
                 
             except Exception as e:
@@ -929,9 +1158,24 @@ class EnhancedTrader:
         
         try:
             if order_id:
-                cancel_result = self.http_client.cancel_order_by_id(symbol.upper(), order_id)
+                if not self.enable_real_trading and order_id.startswith('SIM_'):
+                    # 模拟交易模式，直接取消模拟订单
+                    print(f"🎮 {symbol} 模拟挂单已取消: {reason}")
+                    cancel_result = True
+                else:
+                    cancel_result = self.http_client.cancel_order_by_id(symbol.upper(), order_id)
+                
                 if cancel_result:
                     print(f"🚫 {symbol} 挂单已取消: {reason}")
+                    
+                    # 发送钉钉通知
+                    if self.notifier:
+                        self.notifier.notify_order_cancelled(
+                            symbol=symbol,
+                            order_type="黄金分割点挂单",
+                            reason=reason
+                        )
+                    
                     del self.pending_orders[symbol]
                     return True, "取消成功"
             
@@ -997,8 +1241,13 @@ class EnhancedTrader:
     
     def get_portfolio_summary(self):
         """获取投资组合摘要"""
-        balances = self.get_account_balance()
-        usdt_balance = balances.get('USDT', {}).get('total', 0)
+        if not self.enable_real_trading:
+            # 模拟交易模式
+            usdt_balance = self.simulated_usdt_balance
+        else:
+            # 真实交易模式
+            balances = self.get_account_balance()
+            usdt_balance = balances.get('USDT', {}).get('total', 0)
         
         total_position_value = 0
         for symbol, position in self.positions.items():
@@ -1013,6 +1262,7 @@ class EnhancedTrader:
         pending_value = sum(order['quantity'] * order['price'] for order in self.pending_orders.values())
         
         summary = {
+            'trading_mode': 'simulation' if not self.enable_real_trading else 'real',
             'usdt_balance': usdt_balance,
             'position_value': total_position_value,
             'total_value': total_value,

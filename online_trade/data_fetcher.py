@@ -35,7 +35,7 @@ pd.set_option('display.float_format', '{:.8f}'.format)
 class OnlineDataFetcher:
     """在线数据拉取器"""
     
-    def __init__(self, data_dir="../online_data", lookback_days=30):
+    def __init__(self, data_dir="../online_data", lookback_days=21):
         """
         初始化数据拉取器
         
@@ -62,7 +62,7 @@ class OnlineDataFetcher:
         """解析时间字符串"""
         return datetime.strptime(time_str, '%Y-%m-%d_%H_%M').replace(tzinfo=CHINA_TZ)
     
-    def get_klines_from_api(self, symbol, interval="15m", start_time=None, end_time=None, limit=1000):
+    def get_klines_from_api(self, symbol, interval="15m", start_time=None, end_time=None, limit=5000):
         """
         从币安API获取K线数据
         """

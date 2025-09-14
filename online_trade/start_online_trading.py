@@ -24,12 +24,13 @@ BEIJING_TZ = pytz.timezone('Asia/Shanghai')
 class OnlineTradingSystem:
     """在线交易系统管理器"""
     
-    def __init__(self, config_override=None):
+    def __init__(self, config_override=None, dingtalk_webhook=None):
         """
         初始化在线交易系统
         
         参数:
         - config_override: 配置覆盖字典（可选）
+        - dingtalk_webhook: 钉钉Webhook地址（可选）
         """
         # 获取配置
         self.config = get_config()
@@ -42,7 +43,8 @@ class OnlineTradingSystem:
         
         # 初始化组件
         self.data_fetcher = OnlineDataFetcher()
-        self.strategy_engine = OnlineStrategyEngine(config_override=config_override)
+        self.strategy_engine = OnlineStrategyEngine(config_override=config_override, dingtalk_webhook=dingtalk_webhook)
+        self.dingtalk_webhook = dingtalk_webhook
         
         # 运行状态
         self.running = False
@@ -187,8 +189,20 @@ def main():
                         help='滑点限制（默认0.1%）')
     parser.add_argument('--data-only', action='store_true', help='仅启动数据拉取器')
     parser.add_argument('--strategy-only', action='store_true', help='仅启动策略引擎')
+    parser.add_argument('--dingtalk-webhook', type=str, 
+                        default='https://oapi.dingtalk.com/robot/send?access_token=562f41c37f10bc9d77fb0e3535c1cc778e7666ad9c1173fffcf9fb8a939118a7',
+                        help='钉钉机器人Webhook地址')
+    parser.add_argument('--disable-dingtalk', action='store_true', help='禁用钉钉通知')
+    parser.add_argument('--enable-real-trading', action='store_true', help='启用真实交易（默认为模拟模式）')
     
     args = parser.parse_args()
+    
+    # 确定钉钉通知设置
+    dingtalk_webhook = None if args.disable_dingtalk else args.dingtalk_webhook
+    
+    # 确定交易模式
+    trading_mode = "真实交易" if args.enable_real_trading else "模拟交易"
+    mode_emoji = "💰" if args.enable_real_trading else "🎮"
     
     print("🌟 欢迎使用在线交易系统!")
     print("="*60)
@@ -197,6 +211,8 @@ def main():
     print("   🎯 成交量突破策略 (4小时周期)")
     print("   🛡️  智能风险管理 (止盈止损)")
     print("   💎 黄金分割点买入")
+    print(f"   {mode_emoji} 交易模式: {trading_mode}")
+    print(f"   🔔 钉钉通知: {'✅ 已启用' if dingtalk_webhook else '❌ 已禁用'}")
     print("="*60)
     
     if args.data_only:
@@ -211,10 +227,11 @@ def main():
         config_override = {
             'trading': {
                 'initial_capital': args.capital,
-                'buy_strategy': args.buy_strategy
+                'buy_strategy': args.buy_strategy,
+                'enable_real_trading': args.enable_real_trading
             }
         }
-        engine = OnlineStrategyEngine(config_override=config_override)
+        engine = OnlineStrategyEngine(config_override=config_override, dingtalk_webhook=dingtalk_webhook)
         engine.start_trading()
     
     else:
@@ -224,10 +241,11 @@ def main():
             'trading': {
                 'initial_capital': args.capital,
                 'buy_strategy': args.buy_strategy,
-                'slippage_limit': args.slippage_limit
+                'slippage_limit': args.slippage_limit,
+                'enable_real_trading': args.enable_real_trading
             }
         }
-        system = OnlineTradingSystem(config_override=config_override)
+        system = OnlineTradingSystem(config_override=config_override, dingtalk_webhook=dingtalk_webhook)
         system.start_system()
 
 

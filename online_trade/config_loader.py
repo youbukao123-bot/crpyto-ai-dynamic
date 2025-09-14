@@ -113,6 +113,10 @@ class TradingConfig:
     
     # 交易配置属性
     @property
+    def enable_real_trading(self) -> bool:
+        return self.get('trading', 'enable_real_trading', False)
+    
+    @property
     def initial_capital(self) -> float:
         return self.get('trading', 'initial_capital', 1000)
     
@@ -250,6 +254,7 @@ class TradingConfig:
         print(f"   超时设置: {self.timeout}秒")
         
         print("\n💰 交易配置:")
+        print(f"   真实交易: {'✅ 启用' if self.enable_real_trading else '❌ 模拟模式'}")
         print(f"   初始资金: ${self.initial_capital:,}")
         print(f"   单仓位上限: {self.max_position_pct:.1%}")
         print(f"   总仓位上限: {self.max_total_exposure:.1%}")

@@ -27,12 +27,13 @@ BEIJING_TZ = pytz.timezone('Asia/Shanghai')
 class OnlineStrategyEngine:
     """在线策略交易引擎"""
     
-    def __init__(self, config_override=None):
+    def __init__(self, config_override=None, dingtalk_webhook=None):
         """
         初始化在线策略引擎
         
         参数:
         - config_override: 配置覆盖字典（可选）
+        - dingtalk_webhook: 钉钉Webhook地址（可选）
         """
         # 获取配置
         self.config = get_config()
@@ -58,7 +59,7 @@ class OnlineStrategyEngine:
         )
         
         # 初始化交易器
-        self.trader = EnhancedTrader(config_override=config_override)
+        self.trader = EnhancedTrader(config_override=config_override, dingtalk_webhook=dingtalk_webhook)
         
         # 交易记录
         self.signal_history = []
