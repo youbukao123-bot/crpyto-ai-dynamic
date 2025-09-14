@@ -1,0 +1,4 @@
+
+#poto info
+DEFAULT_ZHISUN_PCT = -0.7
+DEFAULT_ZHIYING_PCT = 1.0
