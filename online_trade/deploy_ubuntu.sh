@@ -22,7 +22,7 @@ sudo apt upgrade -y
 
 # 安装 Python 3 和 pip
 echo "🐍 安装 Python 3 和相关工具..."
-sudo apt install -y python3 python3-pip python3-venv python3-dev
+sudo apt install -y python3 python3-pip python3-dev
 
 # 安装系统级依赖
 echo "🔧 安装系统级依赖..."
@@ -33,35 +33,25 @@ echo "🔍 检查 Python 版本..."
 python3 --version
 pip3 --version
 
-# 创建虚拟环境
-echo "🏗️  创建 Python 虚拟环境..."
-if [ ! -d "venv" ]; then
-    python3 -m venv venv
-    echo "✅ 虚拟环境创建完成"
-else
-    echo "ℹ️  虚拟环境已存在"
-fi
-
-# 激活虚拟环境
-echo "⚡ 激活虚拟环境..."
-source venv/bin/activate
+# 跳过虚拟环境创建，直接使用系统Python
+echo "⚡ 使用系统 Python 环境..."
 
 # 升级 pip
 echo "📈 升级 pip..."
-pip install --upgrade pip
+pip3 install --upgrade pip
 
 # 安装 Python 依赖
 echo "📚 安装 Python 依赖包..."
 if [ -f "requirements-minimal.txt" ]; then
     echo "使用最小依赖包..."
-    pip install -r requirements-minimal.txt
+    pip3 install -r requirements-minimal.txt
 elif [ -f "requirements.txt" ]; then
     echo "使用完整依赖包..."
-    pip install -r requirements.txt
+    pip3 install -r requirements.txt
 else
     echo "❌ 未找到 requirements.txt 文件"
     echo "手动安装核心依赖..."
-    pip install pandas numpy requests pytz schedule python-binance
+    pip3 install pandas numpy requests pytz schedule python-binance
 fi
 
 # 检查关键包安装状态
@@ -122,15 +112,6 @@ cat > start_trading.sh << 'EOF'
 
 cd "$(dirname "$0")"
 
-# 激活虚拟环境
-if [ -d "venv" ]; then
-    source venv/bin/activate
-    echo "✅ 虚拟环境已激活"
-else
-    echo "❌ 虚拟环境不存在，请先运行部署脚本"
-    exit 1
-fi
-
 # 检查配置文件
 if [ ! -f "../online_data/config/config.json" ]; then
     echo "❌ 配置文件不存在: ../online_data/config/config.json"
@@ -154,14 +135,6 @@ cat > test_system.sh << 'EOF'
 # 测试系统各组件
 
 cd "$(dirname "$0")"
-
-# 激活虚拟环境
-if [ -d "venv" ]; then
-    source venv/bin/activate
-else
-    echo "❌ 虚拟环境不存在"
-    exit 1
-fi
 
 echo "🧪 测试系统组件..."
 
@@ -231,3 +204,5 @@ echo "  指定资金: ./start_trading.sh --capital 5000"
 echo "  禁用通知: ./start_trading.sh --disable-dingtalk"
 echo ""
 echo "📚 更多信息请查看 README_SIMULATION.md 和 README_DINGTALK.md"
+echo ""
+echo "⚠️  注意: 本部署使用系统Python环境，无虚拟环境隔离"

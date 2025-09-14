@@ -25,32 +25,23 @@ sudo apt update && sudo apt upgrade -y
 #### 步骤2: 安装Python和依赖
 ```bash
 # 安装 Python 3 和相关工具
-sudo apt install -y python3 python3-pip python3-venv python3-dev build-essential
+sudo apt install -y python3 python3-pip python3-dev build-essential
 
 # 检查版本
 python3 --version  # 应该是 3.10+
 pip3 --version
 ```
 
-#### 步骤3: 创建虚拟环境
+#### 步骤3: 安装Python依赖
 ```bash
-# 在 online_trade 目录下创建虚拟环境
-python3 -m venv venv
-
-# 激活虚拟环境
-source venv/bin/activate
-
 # 升级 pip
-pip install --upgrade pip
-```
+pip3 install --upgrade pip
 
-#### 步骤4: 安装Python依赖
-```bash
 # 安装最小依赖（推荐）
-pip install -r requirements-minimal.txt
+pip3 install -r requirements-minimal.txt
 
 # 或安装完整依赖
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 ```
 
 ## 📦 依赖说明
@@ -134,9 +125,6 @@ SOLUSDT" > ../online_data/exchange_binance_market.txt
 
 ### 2. 手动测试
 ```bash
-# 激活虚拟环境
-source venv/bin/activate
-
 # 测试依赖导入
 python3 -c "import pandas, numpy, requests, pytz, schedule; print('✅ 所有依赖正常')"
 
@@ -163,9 +151,6 @@ python3 test_simulation_mode.py
 
 ### 方法2: 直接启动
 ```bash
-# 激活虚拟环境
-source venv/bin/activate
-
 # 启动系统
 python3 start_online_trading.py --help  # 查看所有参数
 python3 start_online_trading.py         # 默认模拟模式
@@ -276,6 +261,7 @@ netstat -tulpn | grep python3
 3. **定期备份配置和日志**
 4. **监控系统资源使用**
 5. **定期更新依赖包**
+6. **⚠️ 注意: 本部署直接使用系统Python环境，无虚拟环境隔离**
 
 ## 📚 更多文档
 
