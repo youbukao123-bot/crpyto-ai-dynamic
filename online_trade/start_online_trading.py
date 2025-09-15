@@ -43,7 +43,7 @@ class OnlineTradingSystem:
                     self.config._config[section].update(values)
         
         # 初始化日志管理器
-        self.logger = init_log_manager(base_dir=".", enable_console=True)
+        self.logger = init_log_manager(base_dir="../online_data", enable_console=True)
         self.logger.log_system_start("OnlineTradingSystem", {
             "config_override": config_override,
             "dingtalk_enabled": dingtalk_webhook is not None

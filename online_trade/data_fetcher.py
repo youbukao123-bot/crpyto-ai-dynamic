@@ -53,7 +53,7 @@ class OnlineDataFetcher:
         
         # 初始化数据拉取专用日志管理器
         from online_trade.log_manager import LogManager
-        self.logger = LogManager(base_dir="dat_log", enable_console=True)
+        self.logger = LogManager(base_dir="../online_data/dat_log", enable_console=True)
         self.logger.log_system_start("OnlineDataFetcher", {
             "data_dir": self.data_dir,
             "lookback_days": self.lookback_days
