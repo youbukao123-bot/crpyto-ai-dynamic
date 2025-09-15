@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from online_trade.data_fetcher import OnlineDataFetcher
 from online_trade.online_strategy_engine import OnlineStrategyEngine
 from online_trade.config_loader import get_config
+from online_trade.log_manager import init_log_manager
 
 # 北京时区
 BEIJING_TZ = pytz.timezone('Asia/Shanghai')
@@ -40,6 +41,13 @@ class OnlineTradingSystem:
             for section, values in config_override.items():
                 if hasattr(self.config, '_config') and section in self.config._config:
                     self.config._config[section].update(values)
+        
+        # 初始化日志管理器
+        self.logger = init_log_manager(base_dir=".", enable_console=True)
+        self.logger.log_system_start("OnlineTradingSystem", {
+            "config_override": config_override,
+            "dingtalk_enabled": dingtalk_webhook is not None
+        })
         
         # 初始化组件
         self.data_fetcher = OnlineDataFetcher()

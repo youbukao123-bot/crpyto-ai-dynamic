@@ -19,6 +19,7 @@ from gateway.binance import BinanceSpotHttp, OrderStatus, OrderType, OrderSide
 from utils.log_utils import print_log
 from online_trade.config_loader import get_config
 from online_trade.dingtalk_notifier import get_notifier, init_notifier
+from online_trade.log_manager import get_log_manager, init_log_manager
 
 # 北京时区
 BEIJING_TZ = pytz.timezone('Asia/Shanghai')
@@ -190,6 +191,13 @@ class EnhancedTrader:
                 if hasattr(self.config, '_config') and section in self.config._config:
                     self.config._config[section].update(values)
         
+        # 初始化日志管理器
+        self.logger = init_log_manager(base_dir=".", enable_console=True)
+        self.logger.log_system_start("EnhancedTrader", {
+            "enable_real_trading": config_override.get('trading', {}).get('enable_real_trading', False) if config_override else False,
+            "initial_capital": self.config.initial_capital if hasattr(self.config, 'initial_capital') else 1000
+        })
+        
         # 初始化钉钉通知器
         self.notifier = None
         if dingtalk_webhook:
@@ -198,8 +206,10 @@ class EnhancedTrader:
                 keywords = ["Code"]
                 self.notifier = init_notifier(dingtalk_webhook, keywords)
                 print(f"🔔 钉钉通知器已启用")
+                self.logger.info("钉钉通知器初始化成功", "EnhancedTrader")
             except Exception as e:
                 print(f"⚠️ 钉钉通知器初始化失败: {str(e)}")
+                self.logger.error(f"钉钉通知器初始化失败: {str(e)}", "EnhancedTrader")
         
         # 使用配置中的API信息创建HTTP客户端
         self.http_client = BinanceSpotHttp(
@@ -872,6 +882,19 @@ class EnhancedTrader:
             print(f"   成本: ${actual_cost:.2f}")
             print(f"   订单类型: {'限价单' if use_limit_order else '市价单'}")
             
+            # 记录操作日志
+            order_type = "限价单" if use_limit_order else "市价单"
+            reason_text = f"成交量突破信号，信号强度{signal_strength:.1f}，使用{order_type}"
+            self.logger.log_position_open(
+                symbol=symbol,
+                entry_price=avg_price,
+                quantity=executed_qty,
+                cost=actual_cost,
+                strategy=strategy_type,
+                reason=reason_text,
+                is_simulation=not self.enable_real_trading
+            )
+            
             # 发送钉钉通知
             if self.notifier:
                 order_type = "限价单" if use_limit_order else "市价单"
@@ -940,6 +963,18 @@ class EnhancedTrader:
             print(f"   盈亏: ${pnl:.2f} ({pnl_pct:.2%})")
             print(f"   平仓原因: {reason}")
             print(f"   订单类型: {'限价单' if use_limit_order else '市价单'}")
+            
+            # 记录操作日志
+            self.logger.log_position_close(
+                symbol=symbol,
+                exit_price=exit_price,
+                quantity=quantity,
+                revenue=revenue,
+                pnl=pnl,
+                pnl_pct=pnl_pct * 100,  # 转换为百分比
+                reason=reason,
+                is_simulation=not self.enable_real_trading
+            )
             
             # 发送钉钉通知
             if self.notifier:
@@ -1044,6 +1079,17 @@ class EnhancedTrader:
                     print(f"   投资金额: ${investment_amount:.2f}")
                     print(f"   有效期: {self.order_timeout_hours}小时")
                     
+                    # 记录操作日志
+                    self.logger.log_order_placed(
+                        symbol=symbol,
+                        order_type="黄金分割点挂单",
+                        side="BUY",
+                        price=golden_point,
+                        quantity=quantity,
+                        order_id=order_result.get('orderId', ''),
+                        is_simulation=not self.enable_real_trading
+                    )
+                    
                     # 发送钉钉通知
                     if self.notifier:
                         reason = f"黄金分割点策略，收盘价${close_price:.6f}，开盘价${open_price:.6f}"
@@ -1115,6 +1161,15 @@ class EnhancedTrader:
                                 print(f"   成交数量: {filled_qty:.6f}")
                                 print(f"   成交金额: ${filled_qty * filled_price:.2f}")
                                 
+                                # 记录操作日志
+                                self.logger.log_order_filled(
+                                    symbol=symbol,
+                                    order_id=order_id,
+                                    filled_price=filled_price,
+                                    filled_quantity=filled_qty,
+                                    is_simulation=not self.enable_real_trading
+                                )
+                                
                                 # 发送钉钉通知
                                 if self.notifier:
                                     self.notifier.notify_order_filled(
@@ -1129,6 +1184,14 @@ class EnhancedTrader:
                         
                         elif status in ['CANCELLED', 'REJECTED', 'EXPIRED']:
                             print(f"❌ {symbol} 挂单已取消/拒绝: {status}")
+                            
+                            # 记录操作日志
+                            self.logger.log_order_cancelled(
+                                symbol=symbol,
+                                order_id=order_id,
+                                reason=f"订单状态: {status}",
+                                is_simulation=not self.enable_real_trading
+                            )
                             
                             # 发送钉钉通知
                             if self.notifier:

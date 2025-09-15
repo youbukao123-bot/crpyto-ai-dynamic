@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from utils.log_utils import print_log
 from online_trade.config_loader import get_config
+from online_trade.log_manager import get_log_manager
 
 class DataType(Enum):
     SPOT = "spot"
@@ -49,6 +50,14 @@ class OnlineDataFetcher:
         
         # 确保目录存在
         os.makedirs(self.spot_data_dir, exist_ok=True)
+        
+        # 初始化数据拉取专用日志管理器
+        from online_trade.log_manager import LogManager
+        self.logger = LogManager(base_dir="dat_log", enable_console=True)
+        self.logger.log_system_start("OnlineDataFetcher", {
+            "data_dir": self.data_dir,
+            "lookback_days": self.lookback_days
+        })
         
         print(f"📂 数据拉取器初始化完成")
         print(f"   数据目录: {self.data_dir}")
@@ -85,11 +94,15 @@ class OnlineDataFetcher:
             params['endTime'] = end_time
         
         try:
+            # 记录API调用
+            self.logger.log_api_call("OnlineDataFetcher", f"get_klines/{symbol}", params, success=True)
+            
             response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
             
             data = response.json()
             if not data:
+                self.logger.warning(f"API返回空数据: {symbol}", "OnlineDataFetcher")
                 return None
                 
             # 转换为DataFrame
@@ -104,10 +117,16 @@ class OnlineDataFetcher:
             for col in ['open', 'high', 'low', 'close', 'volumn', 'quote_volumn']:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
             
+            # 记录数据拉取成功
+            self.logger.log_data_fetch("OnlineDataFetcher", symbol, interval, len(df), success=True)
+            
             return df
             
         except Exception as e:
-            print(f"❌ 获取 {symbol} K线数据失败: {str(e)}")
+            error_msg = str(e)
+            print(f"❌ 获取 {symbol} K线数据失败: {error_msg}")
+            self.logger.log_api_call("OnlineDataFetcher", f"get_klines/{symbol}", params, success=False, error_msg=error_msg)
+            self.logger.log_data_fetch("OnlineDataFetcher", symbol, interval, 0, success=False, error_msg=error_msg)
             return None
     
     def load_existing_data(self, symbol):
@@ -231,6 +250,36 @@ class OnlineDataFetcher:
             print(f"❌ 失败币种: {', '.join(failed_symbols[:10])}")
             if len(failed_symbols) > 10:
                 print(f"   ... 还有 {len(failed_symbols) - 10} 个")
+    
+    def start_scheduler(self):
+        """启动定时任务"""
+        self.logger.info("启动数据拉取定时任务", "OnlineDataFetcher")
+        print("⏰ 启动数据拉取定时任务...")
+        print("📅 调度规则: 每小时执行一次")
+        
+        # 立即执行一次
+        print("🔥 立即执行一次数据拉取...")
+        self.logger.info("立即执行数据拉取", "OnlineDataFetcher")
+        self.fetch_all_data()
+        
+        # 设置定时任务：每小时执行一次
+        schedule.every().hour.do(self.fetch_all_data)
+        
+        print("✅ 定时任务已启动，等待执行...")
+        self.logger.info("定时任务已启动", "OnlineDataFetcher")
+        
+        while True:
+            try:
+                schedule.run_pending()
+                time.sleep(60)  # 每分钟检查一次
+            except KeyboardInterrupt:
+                self.logger.info("数据拉取器停止：用户中断", "OnlineDataFetcher")
+                print("\n⏹️  数据拉取器已停止")
+                break
+            except Exception as e:
+                self.logger.error(f"定时任务执行异常: {str(e)}", "OnlineDataFetcher", exc_info=True)
+                print(f"❌ 定时任务执行异常: {str(e)}")
+                time.sleep(60)  # 等待一分钟后继续
 
 
 def run_data_fetcher():

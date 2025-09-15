@@ -100,6 +100,11 @@ if [ ! -d "../online_data/spot_klines" ]; then
     echo "📁 创建数据目录: ../online_data/spot_klines"
 fi
 
+# 创建日志目录
+echo "📝 创建日志目录..."
+mkdir -p ope_log log dat_log
+echo "📁 日志目录创建完成: ope_log/, log/, dat_log/"
+
 # 设置权限
 echo "🔐 设置文件权限..."
 chmod +x *.py 2>/dev/null || true
@@ -123,7 +128,7 @@ echo "默认为模拟交易模式，使用 --enable-real-trading 启用真实交
 echo ""
 
 # 启动系统（默认模拟模式）
-python3 start_online_trading.py "$@"
+python3 start_online_trading.py "$@" &
 EOF
 
 chmod +x start_trading.sh
